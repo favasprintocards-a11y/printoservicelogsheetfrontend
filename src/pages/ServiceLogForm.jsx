@@ -142,8 +142,14 @@ const ServiceLogForm = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!engineerSigRef.current.isEmpty()) formData.engineerFeedback.engineerSignature = engineerSigRef.current.toDataURL();
-        if (!customerSigRef.current.isEmpty()) formData.customerFeedback.signature = customerSigRef.current.toDataURL();
+
+        // Ensure latest signatures are captured before submission
+        if (engineerSigRef.current && !engineerSigRef.current.isEmpty()) {
+            formData.engineerFeedback.engineerSignature = engineerSigRef.current.toDataURL();
+        }
+        if (customerSigRef.current && !customerSigRef.current.isEmpty()) {
+            formData.customerFeedback.signature = customerSigRef.current.toDataURL();
+        }
 
         try {
             if (id) {
