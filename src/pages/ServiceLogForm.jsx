@@ -1,0 +1,372 @@
+import React, { useState, useRef, useEffect } from 'react';
+import SignatureCanvas from 'react-signature-canvas';
+import API from '../utils/api';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { ArrowLeft, Save, Printer, FileText, CheckCircle, AlertCircle, Edit2 } from 'lucide-react';
+import printoLogo from '../assets/printo-logo.jpg';
+
+const ServiceLogForm = () => {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const [loading, setLoading] = useState(false);
+
+    const [formData, setFormData] = useState({
+        ticketNumber: '',
+        requestDate: new Date().toISOString().split('T')[0],
+        basicDetails: {
+            ticketId: '',
+            customerName: '',
+            serviceLocation: '',
+            productName: '',
+            productSerial: '',
+            problemDescription: ''
+        },
+        supportDetails: {
+            requestType: [],
+            requestMode: '',
+            receivedBy: '',
+            customerContact: '',
+            resellerName: ''
+        },
+        sparesDetails: {
+            replacedSpare: '',
+            replacedSpareSlNo: '',
+            damagedOldSpare: '',
+            damagedOldSpareSlNo: '',
+            testCardAttached: false,
+            printingCounter: '',
+            serviceCharge: 0,
+            anyOtherCharges: 0,
+            chargeDescription: ''
+        },
+        briefDescription: '',
+        engineerFeedback: {
+            engineerName: '',
+            timeSpent: '',
+            status: 'Pending',
+            engineerSignature: ''
+        },
+        customerFeedback: {
+            rating: '',
+            representativeName: '',
+            signature: '',
+            contactNo: '',
+            email: '',
+            remarks: ''
+        }
+    });
+
+    const engineerSigRef = useRef({});
+    const customerSigRef = useRef({});
+    const componentRef = useRef();
+
+    useEffect(() => {
+        if (id) {
+            setLoading(true);
+            API.get(`/service-logs/${id}`)
+                .then(({ data }) => {
+                    const formattedDate = data.requestDate ? new Date(data.requestDate).toISOString().split('T')[0] : '';
+                    setFormData({
+                        ...data,
+                        requestDate: formattedDate,
+                        basicDetails: data.basicDetails || {},
+                        supportDetails: data.supportDetails || {},
+                        sparesDetails: data.sparesDetails || {},
+                        engineerFeedback: data.engineerFeedback || {},
+                        customerFeedback: data.customerFeedback || {}
+                    });
+                    setTimeout(() => {
+                        if (data.engineerFeedback?.engineerSignature && engineerSigRef.current) {
+                            engineerSigRef.current.fromDataURL(data.engineerFeedback.engineerSignature);
+                        }
+                        if (data.customerFeedback?.signature && customerSigRef.current) {
+                            customerSigRef.current.fromDataURL(data.customerFeedback.signature);
+                        }
+                    }, 500);
+                    setLoading(false);
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Failed to load log");
+                    setLoading(false);
+                });
+        } else {
+            // Fetch next ticket number for new log
+            API.get('/service-logs/next-number')
+                .then(({ data }) => {
+                    setFormData(prev => ({ ...prev, ticketNumber: data.nextNumber }));
+                })
+                .catch(err => console.error("Error fetching next ticket number:", err));
+        }
+    }, [id]);
+
+    useEffect(() => {
+        if (formData.ticketNumber) {
+            document.title = `${formData.ticketNumber} - Service Log`;
+        }
+        return () => { document.title = 'Printocards Service Generator'; };
+    }, [formData.ticketNumber]);
+
+    const handleInputChange = (section, field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            [section]: { ...prev[section], [field]: value }
+        }));
+    };
+
+    const handleBasicChange = (field, value) => handleInputChange('basicDetails', field, value);
+
+    const handleCheckboxChange = (field, value) => {
+        setFormData(prev => {
+            const current = prev.supportDetails[field] || [];
+            const updated = current.includes(value) ? current.filter(item => item !== value) : [...current, value];
+            return {
+                ...prev,
+                supportDetails: { ...prev.supportDetails, [field]: updated }
+            };
+        });
+    };
+
+    const calculateTotal = () => {
+        return (Number(formData.sparesDetails?.serviceCharge) || 0) + (Number(formData.sparesDetails?.anyOtherCharges) || 0);
+    };
+
+    const clearEngineerSig = () => engineerSigRef.current.clear();
+    const clearCustomerSig = () => customerSigRef.current.clear();
+
+    const saveSignature = (ref, section, field) => {
+        if (!ref.current.isEmpty()) {
+            handleInputChange(section, field, ref.current.toDataURL());
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!engineerSigRef.current.isEmpty()) formData.engineerFeedback.engineerSignature = engineerSigRef.current.toDataURL();
+        if (!customerSigRef.current.isEmpty()) formData.customerFeedback.signature = customerSigRef.current.toDataURL();
+
+        try {
+            if (id) {
+                await API.put(`/service-logs/${id}`, formData);
+                alert('Service Log Updated Successfully!');
+            } else {
+                const { data } = await API.post('/service-logs', formData);
+                alert(`Service Log Created Successfully! Ticket #${data.ticketNumber}`);
+                navigate(`/edit/${data._id}`, { replace: true });
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Failed to save log.');
+        }
+    };
+
+    const handlePrint = () => {
+        window.print();
+    };
+
+    if (loading) return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+    );
+
+    return (
+        <div className="min-h-screen bg-slate-100 p-2 md:p-8 print:p-0 flex flex-col items-center font-sans">
+
+            {/* Modern Header / Toolbar (Hidden in Print) */}
+            <div className="w-full max-w-[220mm] mb-6 print:hidden flex flex-col md:flex-row justify-between items-center gap-4">
+                <Link to="/" className="group flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm hover:shadow-md">
+                    <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+                    <span className="font-medium">Back to Dashboard</span>
+                </Link>
+
+                <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200">
+                    <button onClick={handleSubmit} className="flex items-center gap-2 px-6 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium transition-all active:scale-95 shadow-lg shadow-primary/20 mr-2">
+                        <Save size={18} />
+                        {id ? "Update Log" : "Save Log"}
+                    </button>
+                    <button onClick={handlePrint} className="flex items-center gap-2 px-6 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg font-medium transition-all">
+                        <Printer size={18} />
+                        Print / PDF
+                    </button>
+                </div>
+            </div>
+
+            {/* Status indicator for Edit Mode */}
+            {id && (
+                <div className="print:hidden w-full max-w-[210mm] mb-2 flex justify-end">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-100">
+                        <Edit2 size={12} /> Editing Ticket #{formData.ticketNumber}
+                    </span>
+                </div>
+            )}
+
+            {/* A4 Container - Strict Height for Desktop/Print */}
+            {/* We add a subtle ring/shadow for desktop to make it look like paper on a desk */}
+            <div className="w-full md:w-[210mm] print:w-[210mm] md:h-[297mm] print:h-[297mm] h-auto bg-white text-black leading-tight shadow-xl ring-1 ring-black/5 print:shadow-none print:ring-0 relative overflow-hidden transition-all duration-500 ease-in-out" ref={componentRef}>
+
+                {/* Main Content Border - Fills Full Height minus Margins */}
+                <div className="border-[2px] border-black m-2 md:m-8 print:m-8 flex flex-col box-border md:h-[calc(100%-4rem)] print:h-[calc(100%-4rem)]">
+
+                    {/* HEADER */}
+                    <div className="flex flex-col md:flex-row print:flex-row border-b-[2px] border-black h-auto md:h-24 print:h-24 print:flex-nowrap shrink-0">
+                        <div className="w-full md:w-1/3 print:w-1/3 p-2 border-b md:border-b-0 md:border-r print:border-r border-black flex items-center justify-center text-center font-bold text-lg">
+                            PRINTO CARDS & TECHNOLOGIES
+                        </div>
+                        <div className="w-full md:w-1/3 print:w-1/3 p-2 border-b md:border-b-0 md:border-r print:border-r border-black flex items-center justify-center">
+                            <img src={printoLogo} alt="Printo Logo" className="h-20 object-contain" />
+                        </div>
+                        <div className="w-full md:w-1/3 print:w-1/3 p-2 flex flex-col justify-between">
+                            <div className="font-bold text-lg text-center uppercase border-b border-black pb-1">Service Log Sheet</div>
+                            <div className="flex justify-between mt-1">
+                                <span>No:</span><span className="text-red-600 font-bold">{formData.ticketNumber || 'Loading...'}</span>
+                            </div>
+                            <div className="flex justify-between items-center mt-1">
+                                <span>Date:</span><input type="date" value={formData.requestDate} onChange={(e) => setFormData({ ...formData, requestDate: e.target.value })} className="border-b border-gray-400 w-32 text-right focus:outline-none focus:border-primary transition-colors" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SECTION 1: BASIC DETAILS */}
+                    <div className="border-b-[2px] border-black shrink-0">
+                        <div className="flex flex-col md:flex-row print:flex-row border-b border-black print:flex-nowrap">
+                            <div className="w-full md:w-[15%] print:w-[15%] p-1 border-b md:border-b-0 md:border-r print:border-r border-black font-semibold bg-gray-50/50 print:bg-gray-50 text-[15px]">Customer Details</div>
+                            <div className="w-full md:flex-1 print:flex-1 p-1 border-b md:border-b-0 md:border-r print:border-r border-black">
+                                <input type="text" value={formData.basicDetails?.ticketId} onChange={(e) => handleBasicChange('ticketId', e.target.value)} className="w-full focus:bg-primary/10 transition-colors" />
+                            </div>
+                            <div className="w-full md:w-[15%] print:w-[15%] p-1 border-b md:border-b-0 md:border-r print:border-r border-black font-semibold bg-gray-50/50 print:bg-gray-50">Customer Name</div>
+                            <div className="w-full md:flex-1 print:flex-1 p-1">
+                                <input type="text" value={formData.basicDetails?.customerName} onChange={(e) => handleBasicChange('customerName', e.target.value)} className="w-full focus:bg-primary/10 transition-colors" />
+                            </div>
+                        </div>
+                        <div className="flex flex-col md:flex-row print:flex-row border-b border-black print:flex-nowrap">
+                            <div className="w-full md:w-[15%] print:w-[15%] p-1 border-b md:border-b-0 md:border-r print:border-r border-black font-semibold bg-gray-50/50 print:bg-gray-50">Service Location</div>
+                            <div className="w-full md:flex-1 print:flex-1 p-1">
+                                <input type="text" value={formData.basicDetails?.serviceLocation} onChange={(e) => handleBasicChange('serviceLocation', e.target.value)} className="w-full focus:bg-primary/10 transition-colors" />
+                            </div>
+                        </div>
+                        <div className="flex flex-col md:flex-row print:flex-row print:flex-nowrap">
+                            <div className="w-full md:w-[15%] print:w-[15%] p-1 border-b md:border-b-0 md:border-r print:border-r border-black font-semibold bg-gray-50/50 print:bg-gray-50">Product Name</div>
+                            <div className="w-full md:flex-1 print:flex-1 p-1 border-b md:border-b-0 md:border-r print:border-r border-black">
+                                <input type="text" value={formData.basicDetails?.productName} onChange={(e) => handleBasicChange('productName', e.target.value)} className="w-full focus:bg-primary/10 transition-colors" />
+                            </div>
+                            <div className="w-full md:w-[15%] print:w-[15%] p-1 border-b md:border-b-0 md:border-r print:border-r border-black font-semibold bg-gray-50/50 print:bg-gray-50">Serial Number</div>
+                            <div className="w-full md:flex-1 print:flex-1 p-1">
+                                <input type="text" value={formData.basicDetails?.productSerial} onChange={(e) => handleBasicChange('productSerial', e.target.value)} className="w-full focus:bg-primary/10 transition-colors" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SECTION 2: SUPPORT REQUEST DETAILS */}
+                    <div className="border-b-[2px] border-black shrink-0">
+                        <div className="bg-gray-100 font-bold text-center border-b border-black py-1 tracking-wide text-sm">SUPPORT REQUEST DETAILS</div>
+                        <div className="flex flex-wrap p-1">
+                            <span className="font-semibold mr-4 w-full md:w-auto print:w-auto mb-1 md:mb-0">Request Type:</span>
+                            {['Demo', 'Installation & Training', 'Warranty', 'AMC', 'Chargeable'].map((type) => (
+                                <label key={type} className="flex items-center mr-4 cursor-pointer text-sm mb-1 hover:text-primary transition-colors">
+                                    <input type="checkbox" checked={(formData.supportDetails?.requestType || []).includes(type)} onChange={() => handleCheckboxChange('requestType', type)} className="mr-1 accent-black" />
+                                    {type}
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* SECTION 3: BRIEF DESCRIPTION - FLEX GROW to fill space */}
+                    <div className="border-b-[2px] border-black flex-grow flex flex-col min-h-[50px]">
+                        <div className="bg-gray-100 font-bold border-b border-black px-2 py-1 shrink-0 tracking-wide text-sm">BRIEF DESCRIPTION OF SERVICE REQUEST / PROBLEM REPORTED</div>
+                        <textarea className="w-full flex-grow p-2 resize-none h-full focus:bg-primary/10 transition-colors" value={formData.briefDescription} onChange={(e) => setFormData({ ...formData, briefDescription: e.target.value })}></textarea>
+                    </div>
+
+                    {/* SECTION 4: SPARES & SERVICE CHARGES */}
+                    <div className="border-b-[2px] border-black shrink-0">
+                        <div className="bg-gray-100 font-bold text-center border-b border-black py-1 tracking-wide text-sm">SPARES & SERVICE CHARGES</div>
+
+                        <div className="flex flex-col md:flex-row print:flex-row border-b border-black print:flex-nowrap">
+                            <div className="w-full md:w-[15%] print:w-[15%] p-5 border-b md:border-b-0 md:border-r print:border-r border-black font-semibold bg-gray-50/50 print:bg-gray-50 flex items-center justify-center text-center text-[15px] whitespace-pre-wrap">Charges Description</div>
+                            <div className="w-full md:flex-1 print:flex-1 p-1">
+                                <input type="text" placeholder="Description of service/spares charges..." value={formData.sparesDetails?.chargeDescription} onChange={(e) => handleInputChange('sparesDetails', 'chargeDescription', e.target.value)} className="w-full focus:bg-primary/10 transition-colors h-full" />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col md:flex-row print:flex-row border-black print:flex-nowrap">
+                            <div className="w-full md:w-1/3 print:w-1/3 p-1 border-b md:border-b-0 md:border-r print:border-r border-black flex justify-between items-center h-10 md:h-auto">
+                                <span className="font-semibold">Service Charge:</span>
+                                <input type="number" className="w-24 text-right font-mono border-b border-gray-300 focus:border-black" value={formData.sparesDetails?.serviceCharge} onChange={(e) => handleInputChange('sparesDetails', 'serviceCharge', e.target.value)} />
+                            </div>
+                            <div className="w-full md:w-1/3 print:w-1/3 p-1 border-b md:border-b-0 md:border-r print:border-r border-black flex justify-between items-center h-10 md:h-auto">
+                                <span className="font-semibold">Other Charges:</span>
+                                <input type="number" className="w-24 text-right font-mono border-b border-gray-300 focus:border-black" value={formData.sparesDetails?.anyOtherCharges} onChange={(e) => handleInputChange('sparesDetails', 'anyOtherCharges', e.target.value)} />
+                            </div>
+                            <div className="w-full md:w-1/3 print:w-1/3 p-1 flex justify-between items-center font-bold bg-gray-100 md:bg-gray-50 print:bg-gray-50 h-10 md:h-auto">
+                                <span>Total Call Cost:</span>
+                                <span className="font-mono text-lg">{calculateTotal().toFixed(2)}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SECTION 5: FEEDBACK & SIGNATURES - Fixed Height for Footer */}
+                    <div className="flex flex-col md:flex-row print:flex-row border-t border-black md:h-64 print:h-64 print:flex-nowrap shrink-0">
+                        <div className="w-full md:w-1/2 print:w-1/2 border-b md:border-b-0 md:border-r print:border-r border-black flex flex-col">
+                            <div className="bg-gray-100 font-bold border-b border-black px-2 py-1 text-center shrink-0 tracking-wide text-sm">PRINTO ENGINEER FEEDBACK</div>
+                            <div className="flex flex-row border-b border-black print:flex-nowrap shrink-0">
+                                <div className="w-1/2 p-1 border-r border-black">
+                                    <div className="text-xs text-gray-500">Engineer Name</div>
+                                    <input type="text" value={formData.engineerFeedback?.engineerName} onChange={(e) => handleInputChange('engineerFeedback', 'engineerName', e.target.value)} />
+                                </div>
+                                <div className="w-1/2 p-1">
+                                    <div className="text-xs text-gray-500">Time Spent</div>
+                                    <input type="text" value={formData.engineerFeedback?.timeSpent} onChange={(e) => handleInputChange('engineerFeedback', 'timeSpent', e.target.value)} />
+                                </div>
+                            </div>
+                            <div className="flex border-b border-black p-1 items-center justify-between bg-gray-50 shrink-0">
+                                <span className="font-semibold">Current Status:</span>
+                                <select className="border-b border-gray-400 bg-transparent focus:outline-none cursor-pointer" value={formData.engineerFeedback?.status} onChange={(e) => handleInputChange('engineerFeedback', 'status', e.target.value)}>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Completed">Completed</option>
+                                </select>
+                            </div>
+                            <div className="flex-grow flex flex-col relative md:h-auto min-h-0">
+                                <div className="text-xs text-slate-400 p-1 absolute top-0 left-0 z-10 pointer-events-none">Sign Here</div>
+                                <SignatureCanvas ref={engineerSigRef} canvasProps={{ className: 'w-full h-full cursor-crosshair' }} onEnd={() => saveSignature(engineerSigRef, 'engineerFeedback', 'engineerSignature')} />
+                                <button onClick={clearEngineerSig} className="absolute top-1 right-1 text-[10px] text-red-500 hover:bg-red-50 bg-white border border-red-200 px-2 py-0.5 rounded print:hidden z-20 transition-colors">Clear</button>
+                            </div>
+                        </div>
+
+                        <div className="w-full md:w-1/2 print:w-1/2 flex flex-col">
+                            <div className="bg-gray-100 font-bold border-b border-black px-2 py-1 text-center shrink-0 tracking-wide text-sm">CUSTOMER FEEDBACK</div>
+                            <div className="flex border-b border-black p-1 justify-center space-x-4 shrink-0">
+                                {['Poor', 'Average', 'Good', 'Excellent'].map(rating => (
+                                    <label key={rating} className="flex items-center text-xs cursor-pointer hover:text-primary">
+                                        <input type="radio" name="rating" value={rating} checked={formData.customerFeedback?.rating === rating} onChange={(e) => handleInputChange('customerFeedback', 'rating', e.target.value)} className="mr-1 accent-black" />
+                                        {rating}
+                                    </label>
+                                ))}
+                            </div>
+                            <div className="flex-grow flex flex-col relative border-b border-black md:h-auto min-h-0">
+                                <div className="text-xs text-slate-400 p-1 absolute top-0 left-0 z-10 pointer-events-none">Sign Here (with Seal)</div>
+                                <SignatureCanvas ref={customerSigRef} canvasProps={{ className: 'w-full h-full cursor-crosshair' }} onEnd={() => saveSignature(customerSigRef, 'customerFeedback', 'signature')} />
+                                <button onClick={clearCustomerSig} className="absolute top-1 right-1 text-[10px] text-red-500 hover:bg-red-50 bg-white border border-red-200 px-2 py-0.5 rounded print:hidden z-20 transition-colors">Clear</button>
+                            </div>
+                            <div className="flex flex-row border-b border-black print:flex-nowrap shrink-0">
+                                <div className="w-1/2 md:flex-1 p-1 border-r border-black">
+                                    <div className="text-xs text-gray-500">Rep. Name</div>
+                                    <input type="text" value={formData.customerFeedback?.representativeName} onChange={(e) => handleInputChange('customerFeedback', 'representativeName', e.target.value)} className="w-full focus:bg-primary/10 transition-colors" />
+                                </div>
+                                <div className="w-1/2 md:flex-1 p-1">
+                                    <div className="text-xs text-gray-500">Contact / Email</div>
+                                    <input type="text" value={formData.customerFeedback?.contactNo} onChange={(e) => handleInputChange('customerFeedback', 'contactNo', e.target.value)} className="w-full focus:bg-primary/10 transition-colors" />
+                                </div>
+                            </div>
+                            <div className="p-1 shrink-0">
+                                <input type="text" placeholder="Customer Remarks..." value={formData.customerFeedback?.remarks} onChange={(e) => handleInputChange('customerFeedback', 'remarks', e.target.value)} className="w-full focus:bg-primary/10 transition-colors" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    );
+};
+
+export default ServiceLogForm;

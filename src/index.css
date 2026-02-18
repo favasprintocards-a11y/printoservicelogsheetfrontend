@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+  --color-primary: #ef6b22;
+  --color-secondary: #c7d71c;
+}
+
+@layer base {
+  body {
+    @apply bg-gray-100 text-gray-900;
+  }
+}
+
+/* Print Styles */
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body {
+    background: white;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-page {
+    box-shadow: none !important;
+    margin: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    overflow: hidden;
+  }
+}
+
+/* A4 Paper Display on Screen */
+.a4-screen {
+  width: 210mm;
+  min-height: 297mm;
+  background: white;
+  margin: 20px auto;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+  padding: 10mm;
+  /* Simulating print margin */
+  box-sizing: border-box;
+}
+
+@media screen and (max-width: 800px) {
+  .printing-hide {
+    display: none;
+  }
+}
+
+/* Custom Border Utilities for the Form Tables */
+.form-border {
+  @apply border border-black;
+}
+
+.form-border-t {
+  @apply border-t border-black;
+}
+
+.form-border-b {
+  @apply border-b border-black;
+}
+
+.form-border-l {
+  @apply border-l border-black;
+}
+
+.form-border-r {
+  @apply border-r border-black;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="date"],
+select,
+textarea {
+  @apply w-full outline-none bg-transparent px-1;
+}
+
+/* Hide scrollbars for cleaner look in specific areas if needed */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
