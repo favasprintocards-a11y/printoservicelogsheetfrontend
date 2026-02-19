@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import API from '../utils/api';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Save, Printer, FileText, CheckCircle, AlertCircle, Edit2 } from 'lucide-react';
+import { ArrowLeft, Save, Printer, FileText, CheckCircle, AlertCircle, Edit2, QrCode, X } from 'lucide-react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import printoLogo from '../assets/printo-logo.jpg';
 
 const ServiceLogForm = () => {
@@ -55,6 +56,7 @@ const ServiceLogForm = () => {
             remarks: ''
         }
     });
+    const [isScanning, setIsScanning] = useState(false);
 
     const engineerSigRef = useRef({});
     const customerSigRef = useRef({});
@@ -139,6 +141,29 @@ const ServiceLogForm = () => {
             handleInputChange(section, field, ref.current.toDataURL());
         }
     };
+
+    useEffect(() => {
+        let scanner = null;
+        if (isScanning) {
+            scanner = new Html5QrcodeScanner("reader", {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+            }, false);
+
+            scanner.render((result) => {
+                handleBasicChange('productSerial', result);
+                setIsScanning(false);
+                scanner.clear();
+            }, (error) => {
+                // Ignore errors during scanning
+            });
+        }
+        return () => {
+            if (scanner) {
+                scanner.clear().catch(error => console.error("Failed to clear scanner", error));
+            }
+        };
+    }, [isScanning]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -256,9 +281,28 @@ const ServiceLogForm = () => {
                             <div className="w-full md:flex-1 print:flex-1 p-1 border-b md:border-b-0 md:border-r print:border-r border-black">
                                 <input type="text" value={formData.basicDetails?.productName} onChange={(e) => handleBasicChange('productName', e.target.value)} className="w-full focus:bg-primary/10 transition-colors" />
                             </div>
-                            <div className="w-full md:w-[15%] print:w-[15%] p-1 border-b md:border-b-0 md:border-r print:border-r border-black font-semibold bg-gray-50/50 print:bg-gray-50">Serial Number</div>
-                            <div className="w-full md:flex-1 print:flex-1 p-1">
+                            <div className="w-full md:w-[15%] print:w-[15%] p-1 border-b md:border-b-0 md:border-r print:border-r border-black font-semibold bg-gray-50/50 print:bg-gray-50 flex items-center justify-between">
+                                <span>Serial Number</span>
+                                <button type="button" onClick={() => setIsScanning(true)} className="print:hidden p-1 text-primary hover:bg-primary/10 rounded transition-colors" title="Scan QR Code">
+                                    <QrCode size={16} />
+                                </button>
+                            </div>
+                            <div className="w-full md:flex-1 print:flex-1 p-1 relative">
                                 <input type="text" value={formData.basicDetails?.productSerial} onChange={(e) => handleBasicChange('productSerial', e.target.value)} className="w-full focus:bg-primary/10 transition-colors" />
+                                {isScanning && (
+                                    <div className="fixed inset-0 z-[100] bg-black/80 flex flex-col items-center justify-center p-4">
+                                        <div className="bg-white rounded-2xl p-4 w-full max-w-md relative">
+                                            <button onClick={() => setIsScanning(false)} className="absolute -top-12 right-0 text-white hover:text-red-400 transition-colors">
+                                                <X size={32} />
+                                            </button>
+                                            <div className="mb-4 text-center">
+                                                <h3 className="text-lg font-bold">Scan Serial Number</h3>
+                                                <p className="text-sm text-slate-500">Position the QR code within the frame</p>
+                                            </div>
+                                            <div id="reader" className="overflow-hidden rounded-xl border-2 border-slate-100"></div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
