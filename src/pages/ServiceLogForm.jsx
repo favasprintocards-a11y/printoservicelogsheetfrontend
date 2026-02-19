@@ -150,7 +150,11 @@ const ServiceLogForm = () => {
                     scnr = new Html5Qrcode("reader");
                     await scnr.start(
                         { facingMode: "environment" },
-                        { fps: 10, qrbox: { width: 250, height: 250 } },
+                        {
+                            fps: 5,
+                            qrbox: { width: 280, height: 280 },
+                            aspectRatio: 1.0
+                        },
                         (text) => {
                             handleBasicChange('productSerial', text);
                             setIsScanning(false);
