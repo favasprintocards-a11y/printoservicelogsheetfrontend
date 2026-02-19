@@ -3,7 +3,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import API from '../utils/api';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Save, Printer, FileText, CheckCircle, AlertCircle, Edit2, QrCode, X } from 'lucide-react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import printoLogo from '../assets/printo-logo.jpg';
 
 const ServiceLogForm = () => {
@@ -143,35 +143,30 @@ const ServiceLogForm = () => {
     };
 
     useEffect(() => {
-        let scanner = null;
+        let scnr = null;
         if (isScanning) {
-            // Small delay to ensure the DOM 'reader' div is fully mounted
-            const timer = setTimeout(() => {
+            const timer = setTimeout(async () => {
                 try {
-                    scanner = new Html5QrcodeScanner("reader", {
-                        fps: 10,
-                        qrbox: { width: 250, height: 250 },
-                        aspectRatio: 1.0
-                    }, false);
-
-                    scanner.render((result) => {
-                        handleBasicChange('productSerial', result);
-                        setIsScanning(false);
-                        scanner.clear();
-                    }, (error) => {
-                        // Scan errors are normal when no QR is in view
-                    });
+                    scnr = new Html5Qrcode("reader");
+                    await scnr.start(
+                        { facingMode: "environment" },
+                        { fps: 10, qrbox: { width: 250, height: 250 } },
+                        (text) => {
+                            handleBasicChange('productSerial', text);
+                            setIsScanning(false);
+                        },
+                        () => { } // Silent
+                    );
                 } catch (err) {
-                    console.error("Scanner initialization failed:", err);
-                    alert("Could not start camera. Please ensure you are using HTTPS or localhost and have granted camera permissions.");
+                    console.error(err);
                     setIsScanning(false);
                 }
             }, 300);
 
             return () => {
                 clearTimeout(timer);
-                if (scanner) {
-                    scanner.clear().catch(error => console.error("Failed to clear scanner", error));
+                if (scnr && scnr.isScanning) {
+                    scnr.stop().then(() => scnr.clear()).catch(() => { });
                 }
             };
         }
