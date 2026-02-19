@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import API from '../utils/api';
 import { Search, Plus, FileText, CheckCircle, Clock, MoreVertical, Edit2, ChevronRight, LayoutDashboard, Settings, User, Trash2 } from 'lucide-react';
@@ -8,6 +8,7 @@ const Dashboard = () => {
     const [logs, setLogs] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchLogs();
@@ -37,15 +38,15 @@ const Dashboard = () => {
         }
     };
 
-    const filteredLogs = logs.filter(log =>
-        log.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const filteredLogs = useMemo(() => logs.filter(log =>
+        log.ticketNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.basicDetails?.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.basicDetails?.productSerial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.engineerFeedback?.engineerName?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    ), [logs, searchTerm]);
 
-    const pendingCount = logs.filter(l => l.engineerFeedback?.status === 'Pending').length;
-    const completedCount = logs.filter(l => l.engineerFeedback?.status === 'Completed').length;
+    const pendingCount = useMemo(() => logs.filter(l => l.engineerFeedback?.status === 'Pending').length, [logs]);
+    const completedCount = useMemo(() => logs.filter(l => l.engineerFeedback?.status === 'Completed').length, [logs]);
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex">
@@ -185,7 +186,7 @@ const Dashboard = () => {
                                         <tr><td colSpan="6" className="p-8 text-center text-slate-500">No logs found</td></tr>
                                     ) : (
                                         filteredLogs.map(log => (
-                                            <tr key={log._id} className="group hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => window.location.href = `/edit/${log._id}`}>
+                                            <tr key={log._id} className="group hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(`/edit/${log._id}`)}>
                                                 <td className="px-6 py-4">
                                                     <span className="font-mono text-sm font-medium text-slate-700 group-hover:text-primary transition-colors">
                                                         {log.ticketNumber}

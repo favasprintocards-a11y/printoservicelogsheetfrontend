@@ -268,7 +268,7 @@ const ServiceLogForm = () => {
                         <div className="bg-gray-100 font-bold text-center border-b border-black py-1 tracking-wide text-sm">SUPPORT REQUEST DETAILS</div>
                         <div className="flex flex-wrap p-1">
                             <span className="font-semibold mr-4 w-full md:w-auto print:w-auto mb-1 md:mb-0">Request Type:</span>
-                            {['Demo', 'Installation & Training', 'Warranty', 'AMC', 'Chargeable'].map((type) => (
+                            {['Demo', 'Installation & Training', 'Warranty', 'Own Printer', 'Chargeable'].map((type) => (
                                 <label key={type} className="flex items-center mr-4 cursor-pointer text-sm mb-1 hover:text-primary transition-colors">
                                     <input type="checkbox" checked={(formData.supportDetails?.requestType || []).includes(type)} onChange={() => handleCheckboxChange('requestType', type)} className="mr-1 accent-black" />
                                     {type}
