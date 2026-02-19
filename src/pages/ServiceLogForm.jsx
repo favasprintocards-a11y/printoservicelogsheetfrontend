@@ -145,24 +145,36 @@ const ServiceLogForm = () => {
     useEffect(() => {
         let scanner = null;
         if (isScanning) {
-            scanner = new Html5QrcodeScanner("reader", {
-                fps: 10,
-                qrbox: { width: 250, height: 250 },
-            }, false);
+            // Small delay to ensure the DOM 'reader' div is fully mounted
+            const timer = setTimeout(() => {
+                try {
+                    scanner = new Html5QrcodeScanner("reader", {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 },
+                        aspectRatio: 1.0
+                    }, false);
 
-            scanner.render((result) => {
-                handleBasicChange('productSerial', result);
-                setIsScanning(false);
-                scanner.clear();
-            }, (error) => {
-                // Ignore errors during scanning
-            });
+                    scanner.render((result) => {
+                        handleBasicChange('productSerial', result);
+                        setIsScanning(false);
+                        scanner.clear();
+                    }, (error) => {
+                        // Scan errors are normal when no QR is in view
+                    });
+                } catch (err) {
+                    console.error("Scanner initialization failed:", err);
+                    alert("Could not start camera. Please ensure you are using HTTPS or localhost and have granted camera permissions.");
+                    setIsScanning(false);
+                }
+            }, 300);
+
+            return () => {
+                clearTimeout(timer);
+                if (scanner) {
+                    scanner.clear().catch(error => console.error("Failed to clear scanner", error));
+                }
+            };
         }
-        return () => {
-            if (scanner) {
-                scanner.clear().catch(error => console.error("Failed to clear scanner", error));
-            }
-        };
     }, [isScanning]);
 
     const handleSubmit = async (e) => {
