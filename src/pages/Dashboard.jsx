@@ -41,6 +41,7 @@ const Dashboard = () => {
     const filteredLogs = useMemo(() => logs.filter(log =>
         log.ticketNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.basicDetails?.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.basicDetails?.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.basicDetails?.productSerial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.engineerFeedback?.engineerName?.toLowerCase().includes(searchTerm.toLowerCase())
     ), [logs, searchTerm]);
@@ -82,7 +83,7 @@ const Dashboard = () => {
                             <input
                                 type="text"
                                 className="block w-full px-4 py-2.5 border-none rounded-xl bg-slate-100 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all"
-                                placeholder="Search tickets, customers..."
+                                placeholder="Search tickets, customers, serial numbers..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
@@ -152,7 +153,7 @@ const Dashboard = () => {
                             <input
                                 type="text"
                                 className="block w-full pl-4 pr-3 py-3 border border-slate-200 rounded-xl bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                placeholder="Search..."
+                                placeholder="Search tickets, customers, serials..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
@@ -174,6 +175,7 @@ const Dashboard = () => {
                                         <th className="px-6 py-4 font-semibold">Date</th>
                                         <th className="px-6 py-4 font-semibold">Customer</th>
                                         <th className="px-6 py-4 font-semibold">Product</th>
+                                        <th className="px-6 py-4 font-semibold">Serial Number</th>
                                         <th className="px-6 py-4 font-semibold">Engineer</th>
                                         <th className="px-6 py-4 font-semibold">Status</th>
                                         <th className="px-6 py-4 font-semibold text-right">Action</th>
@@ -181,9 +183,9 @@ const Dashboard = () => {
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {loading ? (
-                                        <tr><td colSpan="6" className="p-8 text-center text-slate-500">Loading...</td></tr>
+                                        <tr><td colSpan="8" className="p-8 text-center text-slate-500">Loading...</td></tr>
                                     ) : filteredLogs.length === 0 ? (
-                                        <tr><td colSpan="6" className="p-8 text-center text-slate-500">No logs found</td></tr>
+                                        <tr><td colSpan="8" className="p-8 text-center text-slate-500">No logs found</td></tr>
                                     ) : (
                                         filteredLogs.map(log => (
                                             <tr key={log._id} className="group hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(`/edit/${log._id}`)}>
@@ -205,7 +207,11 @@ const Dashboard = () => {
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-slate-600">
                                                     <div className="font-medium">{log.basicDetails?.productName}</div>
-                                                    <div className="text-xs text-slate-400">{log.basicDetails?.productSerial}</div>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-slate-600">
+                                                    <div className="font-mono bg-slate-100 px-2 py-1 rounded text-xs inline-block">
+                                                        {log.basicDetails?.productSerial || 'N/A'}
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-slate-600 font-medium">
                                                     {log.engineerFeedback?.engineerName || 'Unassigned'}
