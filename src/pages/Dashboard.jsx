@@ -16,7 +16,7 @@ const Dashboard = () => {
 
     const fetchLogs = async () => {
         try {
-            const { data } = await API.get('/service-logs');
+            const { data } = await API.get('/service-logs?limit=100');
             setLogs(data);
             setLoading(false);
         } catch (error) {
@@ -183,7 +183,23 @@ const Dashboard = () => {
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {loading ? (
-                                        <tr><td colSpan="8" className="p-8 text-center text-slate-500">Loading...</td></tr>
+                                        Array.from({ length: 5 }).map((_, i) => (
+                                            <tr key={i} className="animate-pulse">
+                                                <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded"></div></td>
+                                                <td className="px-6 py-4"><div className="h-4 w-20 bg-slate-200 rounded"></div></td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-slate-200"></div>
+                                                        <div className="h-4 w-28 bg-slate-200 rounded"></div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded"></div></td>
+                                                <td className="px-6 py-4"><div className="h-5 w-20 bg-slate-200 rounded-md"></div></td>
+                                                <td className="px-6 py-4"><div className="h-4 w-20 bg-slate-200 rounded"></div></td>
+                                                <td className="px-6 py-4"><div className="h-5 w-16 bg-slate-200 rounded-full"></div></td>
+                                                <td className="px-6 py-4"><div className="h-4 w-10 bg-slate-200 rounded ml-auto"></div></td>
+                                            </tr>
+                                        ))
                                     ) : filteredLogs.length === 0 ? (
                                         <tr><td colSpan="8" className="p-8 text-center text-slate-500">No logs found</td></tr>
                                     ) : (

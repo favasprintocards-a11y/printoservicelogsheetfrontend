@@ -3,7 +3,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import API from '../utils/api';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Save, Printer, FileText, CheckCircle, AlertCircle, Edit2, QrCode, X } from 'lucide-react';
-import { Html5Qrcode } from 'html5-qrcode';
+// html5-qrcode is loaded dynamically only when scanning is triggered
 import printoLogo from '../assets/printo-logo.jpg';
 
 const ServiceLogForm = () => {
@@ -57,9 +57,10 @@ const ServiceLogForm = () => {
         }
     });
     const [isScanning, setIsScanning] = useState(false);
+    const [sigReady, setSigReady] = useState(false);
 
-    const engineerSigRef = useRef({});
-    const customerSigRef = useRef({});
+    const engineerSigRef = useRef(null);
+    const customerSigRef = useRef(null);
     const componentRef = useRef();
 
     useEffect(() => {
@@ -77,14 +78,10 @@ const ServiceLogForm = () => {
                         engineerFeedback: data.engineerFeedback || {},
                         customerFeedback: data.customerFeedback || {}
                     });
+                    // Wait for canvas to mount and have proper dimensions before loading image
                     setTimeout(() => {
-                        if (data.engineerFeedback?.engineerSignature && engineerSigRef.current) {
-                            engineerSigRef.current.fromDataURL(data.engineerFeedback.engineerSignature);
-                        }
-                        if (data.customerFeedback?.signature && customerSigRef.current) {
-                            customerSigRef.current.fromDataURL(data.customerFeedback.signature);
-                        }
-                    }, 500);
+                        setSigReady(true);
+                    }, 300);
                     setLoading(false);
                 })
                 .catch(err => {
@@ -133,12 +130,64 @@ const ServiceLogForm = () => {
         return (Number(formData.sparesDetails?.serviceCharge) || 0) + (Number(formData.sparesDetails?.anyOtherCharges) || 0);
     };
 
-    const clearEngineerSig = () => engineerSigRef.current.clear();
-    const clearCustomerSig = () => customerSigRef.current.clear();
+    const clearEngineerSig = () => {
+        if (engineerSigRef.current) engineerSigRef.current.clear();
+    };
+    const clearCustomerSig = () => {
+        if (customerSigRef.current) customerSigRef.current.clear();
+    };
 
     const saveSignature = (ref, section, field) => {
-        if (!ref.current.isEmpty()) {
+        if (ref.current && !ref.current.isEmpty()) {
             handleInputChange(section, field, ref.current.toDataURL());
+        }
+    };
+
+    // When sigReady flips to true, the canvases are already mounted — load images now
+    useEffect(() => {
+        if (!sigReady) return;
+
+        const loadSig = (ref, dataURL) => {
+            if (!ref.current || !dataURL) return;
+            const canvas = ref.current.getCanvas();
+            const parent = canvas.parentElement;
+            if (parent) {
+                canvas.width = parent.offsetWidth || canvas.offsetWidth;
+                canvas.height = parent.offsetHeight || canvas.offsetHeight;
+            }
+            ref.current.fromDataURL(dataURL);
+        };
+
+        loadSig(engineerSigRef, formData.engineerFeedback?.engineerSignature);
+        loadSig(customerSigRef, formData.customerFeedback?.signature);
+    }, [sigReady]);
+
+    // Called when signature canvas mounts — resize & load saved image if editing
+    const onEngineerSigMount = (ref) => {
+        if (!ref) return;
+        engineerSigRef.current = ref;
+        if (sigReady && formData.engineerFeedback?.engineerSignature) {
+            const canvas = ref.getCanvas();
+            const parent = canvas.parentElement;
+            if (parent) {
+                canvas.width = parent.offsetWidth;
+                canvas.height = parent.offsetHeight;
+            }
+            ref.fromDataURL(formData.engineerFeedback.engineerSignature);
+        }
+    };
+
+    const onCustomerSigMount = (ref) => {
+        if (!ref) return;
+        customerSigRef.current = ref;
+        if (sigReady && formData.customerFeedback?.signature) {
+            const canvas = ref.getCanvas();
+            const parent = canvas.parentElement;
+            if (parent) {
+                canvas.width = parent.offsetWidth;
+                canvas.height = parent.offsetHeight;
+            }
+            ref.fromDataURL(formData.customerFeedback.signature);
         }
     };
 
@@ -147,19 +196,36 @@ const ServiceLogForm = () => {
         if (isScanning) {
             const timer = setTimeout(async () => {
                 try {
-                    scnr = new Html5Qrcode("reader");
+                    // Dynamically import the heavy library only when actually scanning
+                    const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
+                    scnr = new Html5Qrcode("reader", {
+                        formatsToSupport: [
+                            Html5QrcodeSupportedFormats.QR_CODE,
+                            Html5QrcodeSupportedFormats.CODE_128,
+                            Html5QrcodeSupportedFormats.CODE_39,
+                            Html5QrcodeSupportedFormats.CODE_93,
+                            Html5QrcodeSupportedFormats.EAN_13,
+                            Html5QrcodeSupportedFormats.EAN_8,
+                            Html5QrcodeSupportedFormats.UPC_A,
+                            Html5QrcodeSupportedFormats.UPC_E,
+                            Html5QrcodeSupportedFormats.ITF,
+                            Html5QrcodeSupportedFormats.DATA_MATRIX,
+                            Html5QrcodeSupportedFormats.PDF_417
+                        ],
+                        verbose: false
+                    });
                     await scnr.start(
                         { facingMode: "environment" },
                         {
-                            fps: 5,
-                            qrbox: { width: 280, height: 280 },
-                            aspectRatio: 1.0
+                            fps: 10,
+                            qrbox: { width: 280, height: 120 },
+                            aspectRatio: 1.7
                         },
                         (text) => {
                             handleBasicChange('productSerial', text);
                             setIsScanning(false);
                         },
-                        () => { } // Silent
+                        () => { } // Silent error
                     );
                 } catch (err) {
                     console.error(err);
@@ -294,7 +360,7 @@ const ServiceLogForm = () => {
                             </div>
                             <div className="w-full md:w-[15%] print:w-[15%] p-1 border-b md:border-b-0 md:border-r print:border-r border-black font-semibold bg-gray-50/50 print:bg-gray-50 flex items-center justify-between">
                                 <span>Serial Number</span>
-                                <button type="button" onClick={() => setIsScanning(true)} className="print:hidden p-1 text-primary hover:bg-primary/10 rounded transition-colors" title="Scan QR Code">
+                                <button type="button" onClick={() => setIsScanning(true)} className="print:hidden p-1 text-primary hover:bg-primary/10 rounded transition-colors" title="Scan QR Code / Barcode">
                                     <QrCode size={16} />
                                 </button>
                             </div>
@@ -308,9 +374,10 @@ const ServiceLogForm = () => {
                                             </button>
                                             <div className="mb-4 text-center">
                                                 <h3 className="text-lg font-bold">Scan Serial Number</h3>
-                                                <p className="text-sm text-slate-500">Position the QR code within the frame</p>
+                                                <p className="text-sm text-slate-500">Point camera at a <strong>QR code</strong> or <strong>barcode</strong></p>
                                             </div>
                                             <div id="reader" className="overflow-hidden rounded-xl border-2 border-slate-100"></div>
+                                            <p className="text-xs text-center text-slate-400 mt-2">Supports QR · Code128 · Code39 · EAN-13 · EAN-8 · UPC · ITF · PDF417</p>
                                         </div>
                                     </div>
                                 )}
@@ -388,7 +455,11 @@ const ServiceLogForm = () => {
                             </div>
                             <div className="flex-grow flex flex-col relative md:h-auto min-h-0">
                                 <div className="text-xs text-slate-400 p-1 absolute top-0 left-0 z-10 pointer-events-none">Sign Here</div>
-                                <SignatureCanvas ref={engineerSigRef} canvasProps={{ className: 'w-full h-full cursor-crosshair' }} onEnd={() => saveSignature(engineerSigRef, 'engineerFeedback', 'engineerSignature')} />
+                                <SignatureCanvas
+                                    ref={onEngineerSigMount}
+                                    canvasProps={{ className: 'w-full h-full cursor-crosshair' }}
+                                    onEnd={() => saveSignature(engineerSigRef, 'engineerFeedback', 'engineerSignature')}
+                                />
                                 <button onClick={clearEngineerSig} className="absolute top-1 right-1 text-[10px] text-red-500 hover:bg-red-50 bg-white border border-red-200 px-2 py-0.5 rounded print:hidden z-20 transition-colors">Clear</button>
                             </div>
                         </div>
@@ -405,7 +476,11 @@ const ServiceLogForm = () => {
                             </div>
                             <div className="flex-grow flex flex-col relative border-b border-black md:h-auto min-h-0">
                                 <div className="text-xs text-slate-400 p-1 absolute top-0 left-0 z-10 pointer-events-none">Sign Here (with Seal)</div>
-                                <SignatureCanvas ref={customerSigRef} canvasProps={{ className: 'w-full h-full cursor-crosshair' }} onEnd={() => saveSignature(customerSigRef, 'customerFeedback', 'signature')} />
+                                <SignatureCanvas
+                                    ref={onCustomerSigMount}
+                                    canvasProps={{ className: 'w-full h-full cursor-crosshair' }}
+                                    onEnd={() => saveSignature(customerSigRef, 'customerFeedback', 'signature')}
+                                />
                                 <button onClick={clearCustomerSig} className="absolute top-1 right-1 text-[10px] text-red-500 hover:bg-red-50 bg-white border border-red-200 px-2 py-0.5 rounded print:hidden z-20 transition-colors">Clear</button>
                             </div>
                             <div className="flex flex-row border-b border-black print:flex-nowrap shrink-0">
