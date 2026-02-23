@@ -227,15 +227,22 @@ const ServiceLogForm = () => {
     };
 
     const clearEngineerSig = () => {
-        if (engineerSigRef.current) engineerSigRef.current.clear();
+        if (engineerSigRef.current) {
+            engineerSigRef.current.clear();
+            handleInputChange('engineerFeedback', 'engineerSignature', '');
+        }
     };
     const clearCustomerSig = () => {
-        if (customerSigRef.current) customerSigRef.current.clear();
+        if (customerSigRef.current) {
+            customerSigRef.current.clear();
+            handleInputChange('customerFeedback', 'signature', '');
+        }
     };
 
     const saveSignature = (ref, section, field) => {
-        if (ref.current && !ref.current.isEmpty()) {
-            handleInputChange(section, field, ref.current.toDataURL());
+        if (ref.current) {
+            const data = ref.current.isEmpty() ? '' : ref.current.toDataURL();
+            handleInputChange(section, field, data);
         }
     };
 
@@ -306,20 +313,33 @@ const ServiceLogForm = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Ensure latest signatures are captured before submission
-        if (engineerSigRef.current && !engineerSigRef.current.isEmpty()) {
-            formData.engineerFeedback.engineerSignature = engineerSigRef.current.toDataURL();
-        }
-        if (customerSigRef.current && !customerSigRef.current.isEmpty()) {
-            formData.customerFeedback.signature = customerSigRef.current.toDataURL();
-        }
+        // Capture latest signatures from canvases
+        const engineerSig = (engineerSigRef.current && !engineerSigRef.current.isEmpty())
+            ? engineerSigRef.current.toDataURL()
+            : '';
+        const customerSig = (customerSigRef.current && !customerSigRef.current.isEmpty())
+            ? customerSigRef.current.toDataURL()
+            : '';
+
+        // Construct data to submit without mutating original state
+        const dataToSubmit = {
+            ...formData,
+            engineerFeedback: {
+                ...formData.engineerFeedback,
+                engineerSignature: engineerSig
+            },
+            customerFeedback: {
+                ...formData.customerFeedback,
+                signature: customerSig
+            }
+        };
 
         try {
             if (id) {
-                await API.put(`/service-logs/${id}`, formData);
+                await API.put(`/service-logs/${id}`, dataToSubmit);
                 alert('Service Log Updated Successfully!');
             } else {
-                const { data } = await API.post('/service-logs', formData);
+                const { data } = await API.post('/service-logs', dataToSubmit);
                 alert(`Service Log Created Successfully! Ticket #${data.ticketNumber}`);
                 navigate(`/edit/${data._id}`, { replace: true });
             }
