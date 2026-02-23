@@ -1,10 +1,80 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import API from '../utils/api';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Save, Printer, FileText, CheckCircle, AlertCircle, Edit2, QrCode, X } from 'lucide-react';
+import { ArrowLeft, Save, Printer, Edit2, QrCode, X } from 'lucide-react';
 // html5-qrcode is loaded dynamically only when scanning is triggered
 import printoLogo from '../assets/printo-logo.jpg';
+
+/**
+ * SigPad — a SignatureCanvas wrapper that keeps the canvas pixel dimensions
+ * perfectly in sync with its container via ResizeObserver.
+ * Without this, using `w-full h-full` CSS causes a coordinate mismatch that
+ * makes strokes appear shifted/in wrong positions.
+ */
+const SigPad = React.forwardRef(({ onEnd }, ref) => {
+    const wrapperRef = useRef(null);
+    const sigRef = useRef(null);
+    const isRestoringRef = useRef(false); // prevents re-entrant syncSize during fromDataURL
+
+    // Expose the inner SignatureCanvas instance via the forwarded ref
+    React.useImperativeHandle(ref, () => sigRef.current, []);
+
+    const syncSize = useCallback(() => {
+        if (!sigRef.current || !wrapperRef.current) return;
+        // Block re-entrant calls (fromDataURL can briefly trigger ResizeObserver)
+        if (isRestoringRef.current) return;
+
+        const canvas = sigRef.current.getCanvas();
+        const { offsetWidth: w, offsetHeight: h } = wrapperRef.current;
+        if (!w || !h) return;
+
+        // Skip if pixel dimensions already match — nothing to do
+        if (canvas.width === w && canvas.height === h) return;
+
+        // Save current drawing BEFORE resizing (resizing clears the canvas)
+        let dataURL = null;
+        try {
+            if (!sigRef.current.isEmpty()) {
+                dataURL = sigRef.current.toDataURL();
+            }
+        } catch (_) { /* ignore */ }
+
+        // Resize: set pixel dimensions to match the CSS-rendered container size
+        canvas.width = w;
+        canvas.height = h;
+
+        // Restore drawing — call WITHOUT width/height options so the image
+        // is drawn at 1:1 on the already-correctly-sized canvas (no scaling)
+        if (dataURL) {
+            isRestoringRef.current = true;
+            sigRef.current.fromDataURL(dataURL);
+            // Clear the guard after the async image load completes (~150ms)
+            setTimeout(() => { isRestoringRef.current = false; }, 150);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!wrapperRef.current) return;
+        // Initial sync after mount
+        syncSize();
+        // Watch for container size changes (e.g. window resize, layout shift)
+        const ro = new ResizeObserver(syncSize);
+        ro.observe(wrapperRef.current);
+        return () => ro.disconnect();
+    }, [syncSize]);
+
+    return (
+        <div ref={wrapperRef} style={{ position: 'absolute', inset: 0 }}>
+            <SignatureCanvas
+                ref={sigRef}
+                canvasProps={{ style: { width: '100%', height: '100%', cursor: 'crosshair', display: 'block' } }}
+                onEnd={onEnd}
+            />
+        </div>
+    );
+});
+SigPad.displayName = 'SigPad';
 
 const ServiceLogForm = () => {
     const { id } = useParams();
@@ -143,52 +213,27 @@ const ServiceLogForm = () => {
         }
     };
 
-    // When sigReady flips to true, the canvases are already mounted — load images now
+    // When sigReady flips to true, load saved images into the already-mounted canvases
     useEffect(() => {
         if (!sigReady) return;
-
         const loadSig = (ref, dataURL) => {
             if (!ref.current || !dataURL) return;
             const canvas = ref.current.getCanvas();
-            const parent = canvas.parentElement;
-            if (parent) {
-                canvas.width = parent.offsetWidth || canvas.offsetWidth;
-                canvas.height = parent.offsetHeight || canvas.offsetHeight;
-            }
-            ref.current.fromDataURL(dataURL);
+            ref.current.fromDataURL(dataURL, { width: canvas.width, height: canvas.height });
         };
-
         loadSig(engineerSigRef, formData.engineerFeedback?.engineerSignature);
         loadSig(customerSigRef, formData.customerFeedback?.signature);
     }, [sigReady]);
 
-    // Called when signature canvas mounts — resize & load saved image if editing
+    // Callback refs — store instance and (if editing) load saved signature
     const onEngineerSigMount = (ref) => {
         if (!ref) return;
         engineerSigRef.current = ref;
-        if (sigReady && formData.engineerFeedback?.engineerSignature) {
-            const canvas = ref.getCanvas();
-            const parent = canvas.parentElement;
-            if (parent) {
-                canvas.width = parent.offsetWidth;
-                canvas.height = parent.offsetHeight;
-            }
-            ref.fromDataURL(formData.engineerFeedback.engineerSignature);
-        }
     };
 
     const onCustomerSigMount = (ref) => {
         if (!ref) return;
         customerSigRef.current = ref;
-        if (sigReady && formData.customerFeedback?.signature) {
-            const canvas = ref.getCanvas();
-            const parent = canvas.parentElement;
-            if (parent) {
-                canvas.width = parent.offsetWidth;
-                canvas.height = parent.offsetHeight;
-            }
-            ref.fromDataURL(formData.customerFeedback.signature);
-        }
     };
 
     useEffect(() => {
@@ -453,11 +498,10 @@ const ServiceLogForm = () => {
                                     <option value="Completed">Completed</option>
                                 </select>
                             </div>
-                            <div className="flex-grow flex flex-col relative md:h-auto min-h-0">
+                            <div className="flex-grow flex flex-col relative md:h-auto min-h-[80px]">
                                 <div className="text-xs text-slate-400 p-1 absolute top-0 left-0 z-10 pointer-events-none">Sign Here</div>
-                                <SignatureCanvas
+                                <SigPad
                                     ref={onEngineerSigMount}
-                                    canvasProps={{ className: 'w-full h-full cursor-crosshair' }}
                                     onEnd={() => saveSignature(engineerSigRef, 'engineerFeedback', 'engineerSignature')}
                                 />
                                 <button onClick={clearEngineerSig} className="absolute top-1 right-1 text-[10px] text-red-500 hover:bg-red-50 bg-white border border-red-200 px-2 py-0.5 rounded print:hidden z-20 transition-colors">Clear</button>
@@ -474,11 +518,10 @@ const ServiceLogForm = () => {
                                     </label>
                                 ))}
                             </div>
-                            <div className="flex-grow flex flex-col relative border-b border-black md:h-auto min-h-0">
+                            <div className="flex-grow flex flex-col relative border-b border-black md:h-auto min-h-[80px]">
                                 <div className="text-xs text-slate-400 p-1 absolute top-0 left-0 z-10 pointer-events-none">Sign Here (with Seal)</div>
-                                <SignatureCanvas
+                                <SigPad
                                     ref={onCustomerSigMount}
-                                    canvasProps={{ className: 'w-full h-full cursor-crosshair' }}
                                     onEnd={() => saveSignature(customerSigRef, 'customerFeedback', 'signature')}
                                 />
                                 <button onClick={clearCustomerSig} className="absolute top-1 right-1 text-[10px] text-red-500 hover:bg-red-50 bg-white border border-red-200 px-2 py-0.5 rounded print:hidden z-20 transition-colors">Clear</button>
